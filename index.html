@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五子棋 · 完整禁手规则（三三 / 四四 / 长连）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #2f2a26;
+    color: #e8e0d4;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 20px 12px;
+  }
+  .app { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  .board-wrap {
+    position: relative;
+    background: #c98f4e;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 2px #8a5a28;
+  }
+  canvas { display: block; border-radius: 4px; max-width: 100%; height: auto; cursor: pointer; }
+  .panel {
+    width: 250px;
+    background: #3a342f;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  }
+  h1 { font-size: 19px; font-weight: 600; letter-spacing: 1px; }
+  .sub { font-size: 12px; color: #b3a894; }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group label { font-size: 12px; color: #c9bda9; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 7px 0; font-size: 13px; border: 1px solid #5a4f43;
+    background: #2f2a26; color: #cfc4b2; border-radius: 7px; cursor: pointer;
+    transition: all .15s;
+  }
+  .seg button:hover { border-color: #b08d57; }
+  .seg button.on { background: #b08d57; color: #1f1a15; border-color: #b08d57; font-weight: 600; }
+  .btnrow { display: flex; gap: 8px; }
+  .btnrow button {
+    flex: 1; padding: 9px 0; font-size: 14px; border: none; border-radius: 8px;
+    cursor: pointer; background: #6d5a3a; color: #f3ead9; font-weight: 600;
+    transition: background .15s;
+  }
+  .btnrow button:hover { background: #856d45; }
+  .switch { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #d9cfbd; cursor: pointer; user-select: none; }
+  .toggle { width: 40px; height: 21px; border-radius: 11px; background: #55483a; position: relative; transition: background .2s; }
+  .toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px;
+    border-radius: 50%; background: #d9cfbd; transition: left .2s;
+  }
+  .toggle.on { background: #b08d57; }
+  .toggle.on::after { left: 21px; background: #fff; }
+  .status {
+    min-height: 58px; background: #2b2622; border-radius: 8px; padding: 10px 12px;
+    font-size: 13px; line-height: 1.65; color: #e8e0d4;
+  }
+  .status b { color: #e9c07a; }
+  .status .who-b, .who-w { display:inline-block; width:12px; height:12px; border-radius:50%; vertical-align:-1px; margin-right:4px; }
+  .who-b { background:#111; border:1px solid #555; }
+  .who-w { background:#f5f2ea; border:1px solid #999; }
+  .legend { font-size: 11px; color: #9c8f7c; line-height: 1.7; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:50%; vertical-align:-2px; margin-right:4px; }
+  .toast {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    background: #a3322b; color: #fff; padding: 10px 22px; border-radius: 8px;
+    font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 60;
+  }
+  .toast.show { opacity: 1; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(20,15,10,.62); display: none;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .overlay.show { display: flex; }
+  .dlg {
+    background: #f4ecdd; color: #3a2f22; border-radius: 14px; padding: 30px 40px;
+    text-align: center; box-shadow: 0 14px 44px rgba(0,0,0,.5); animation: pop .25s;
+  }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .dlg h2 { font-size: 22px; margin-bottom: 8px; }
+  .dlg p { font-size: 14px; color: #7a6a52; margin-bottom: 18px; }
+  .dlg button {
+    padding: 10px 34px; font-size: 15px; border: none; border-radius: 8px;
+    background: #b08d57; color: #fff; font-weight: 600; cursor: pointer;
+  }
+  .dlg button:hover { background: #9a744a; }
+  @media (max-width: 900px) {
+    .app { flex-direction: column; align-items: center; }
+    .panel { width: min(94vw, 592px); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="board-wrap"><canvas id="board" width="592" height="592"></canvas></div>
+  <aside class="panel">
+    <div>
+      <h1>五子棋</h1>
+      <div class="sub" style="font-size:12px;color:#b3a894;margin-top:4px;">完整禁手：三三 · 四四 · 长连（仅黑棋）</div>
+    </div>
+    <div class="group">
+      <label>对战模式</label>
+      <div class="seg" id="segMode">
+        <button data-v="pve" class="on">人机对战</button>
+        <button data-v="pvp">双人对战</button>
+      </div>
+    </div>
+    <div class="group" id="grpLevel">
+      <label>AI 难度</label>
+      <div class="seg" id="segLevel">
+        <button data-v="easy">简单</button>
+        <button data-v="medium" class="on">中等</button>
+        <button data-v="hard">困难</button>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button id="btnUndo">悔棋</button>
+      <button id="btnRestart">重新开始</button>
+    </div>
+    <div class="switch" id="swForbidden">
+      <span>禁手点提示</span>
+      <div class="toggle on" id="tgForbidden"></div>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="legend">
+      <i style="background:#111;border:1px solid #666;"></i>黑棋（先行，受禁手约束）
+      <i style="background:#f5f2ea;border:1px solid #999;margin-left:10px;"></i>白棋（无禁手）<br>
+      红色 × 标记 = 黑棋禁手点，无法落子。成五优先于禁手判定。
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+<div class="overlay" id="overlay">
+  <div class="dlg">
+    <h2 id="dlgTitle"></h2>
+    <p id="dlgMsg"></p>
+    <button id="dlgBtn">再来一局</button>
+  </div>
+</div>
+
+<script>
+// ===== RULES-CORE-START =====
+var SIZE = 15;
+var EMPTY = 0, BLACK = 1, WHITE = 2;
+var DIRS = [[1,0],[0,1],[1,1],[1,-1]];
+var MAX_DEPTH = 2;
+
+function idx(x, y) { return y * SIZE + x; }
+function inBoard(x, y) { return x >= 0 && x < SIZE && y >= 0 && y < SIZE; }
+function createBoard() { return new Int8Array(SIZE * SIZE); }
+function opponent(c) { return c === BLACK ? WHITE : BLACK; }
+
+function countDir(board, x, y, dx, dy, color) {
+  var n = 0, cx = x + dx, cy = y + dy;
+  while (inBoard(cx, cy) && board[idx(cx, cy)] === color) { n++; cx += dx; cy += dy; }
+  return n;
+}
+function lineLength(board, x, y, dx, dy, color) {
+  return 1 + countDir(board, x, y, dx, dy, color) + countDir(board, x, y, -dx, -dy, color);
+}
+
+// 方向线上能让 color 成五的空位数（成五点）。
+// 黑棋的成五点必须是"恰好五连"且该点对黑棋合法（成五优先：能成五的点不禁手）。
+function countFivePoints(board, x, y, dx, dy, color, depth) {
+  var count = 0;
+  for (var i = -4; i <= 4; i++) {
+    if (i === 0) continue;
+    var nx = x + dx * i, ny = y + dy * i;
+    if (!inBoard(nx, ny)) continue;
+    if (board[idx(nx, ny)] !== EMPTY) continue;
+    board[idx(nx, ny)] = color;
+    var len = lineLength(board, nx, ny, dx, dy, color);
+    board[idx(nx, ny)] = EMPTY;
+    var isFive = (color === BLACK) ? (len === 5) : (len >= 5);
+    if (!isFive) continue;
+    if (color === BLACK && depth < MAX_DEPTH) {
+      var j = judgeMove(board, nx, ny, BLACK, depth + 1);
+      if (j.result === 'forbidden') continue;
+    }
+    count++;
+  }
+  return count;
+}
+
+// 落子于 (x,y)（已落）后，方向 (dx,dy) 上是否形成"真活三"：
+// 存在合法空位 Q，落 Q 后在该方向形成活四（成五点 >= 2，且成五点均有效）。
+// Q 本身必须是黑棋合法点 —— 这就是递归禁手（假三排除）的核心。
+function isOpenThreeDir(board, x, y, dx, dy, depth) {
+  for (var i = -4; i <= 4; i++) {
+    if (i === 0) continue;
+    var nx = x + dx * i, ny = y + dy * i;
+    if (!inBoard(nx, ny)) continue;
+    if (board[idx(nx, ny)] !== EMPTY) continue;
+    if (depth < MAX_DEPTH) {
+      var j = judgeMove(board, nx, ny, BLACK, depth + 1);
+      if (j.result === 'forbidden' || j.result === 'win') continue;
+    }
+    board[idx(nx, ny)] = BLACK;
+    var fp = countFivePoints(board, nx, ny, dx, dy, BLACK, depth + 1);
+    board[idx(nx, ny)] = EMPTY;
+    if (fp >= 2) return true;
+  }
+  return false;
+}
+
+// 核心裁判：在 (x,y) 落 color 一子，返回判定结果。
+// 裁判顺序（不可颠倒）：
+//   1. 恰好五连 → 该方胜（黑棋成五优先于一切禁手）
+//   2. 白棋长连(>=6) → 白胜；黑棋长连 → 长连禁手判负
+//   3. 黑棋双四 → 四四禁手
+//   4. 黑棋双活三 → 三三禁手
+function judgeMove(board, x, y, color, depth) {
+  depth = (typeof depth === 'number') ? depth : 0;
+  var i0 = idx(x, y);
+  var prev = board[i0];      // 记住落子前原值（checkEnd 在 applyMove 之后调用，这里不能破坏已落子）
+  board[i0] = color;
+
+  var hasFive = false, hasLong = false;
+  for (var d = 0; d < DIRS.length; d++) {
+    var len = lineLength(board, x, y, DIRS[d][0], DIRS[d][1], color);
+    if (len === 5) hasFive = true;
+    else if (len > 5) hasLong = true;
+  }
+
+  var res;
+  if (hasFive) {
+    res = { result: 'win', reason: '五连' };
+  } else if (color === WHITE) {
+    res = hasLong ? { result: 'win', reason: '长连' } : { result: 'ok', reason: '' };
+  } else if (hasLong) {
+    res = { result: 'forbidden', reason: '长连禁手' };
+  } else {
+    var fours = 0, threes = 0;
+    for (var d2 = 0; d2 < DIRS.length; d2++) {
+      var dx = DIRS[d2][0], dy = DIRS[d2][1];
+      var fp = countFivePoints(board, x, y, dx, dy, BLACK, depth);
+      if (fp >= 1) fours++;
+      else if (isOpenThreeDir(board, x, y, dx, dy, depth)) threes++;
+    }
+    if (fours >= 2) res = { result: 'forbidden', reason: '四四禁手' };
+    else if (threes >= 2) res = { result: 'forbidden', reason: '三三禁手' };
+    else res = { result: 'ok', reason: '' };
+  }
+
+  board[i0] = prev;   // 还原为调用前状态：原已落子则保持，原为 EMPTY 则清空
+  return res;
+}
+
+// 收集与任意棋子距离 <= radius 的空位
+function neighborCells(board, radius) {
+  var mark = {}, out = [];
+  for (var y = 0; y < SIZE; y++) {
+    for (var x = 0; x < SIZE; x++) {
+      if (board[idx(x, y)] === EMPTY) continue;
+      for (var dy = -radius; dy <= radius; dy++) {
+        for (var dx = -radius; dx <= radius; dx++) {
+          var nx = x + dx, ny = y + dy;
+          if (!inBoard(nx, ny)) continue;
+          var ii = idx(nx, ny);
+          if (board[ii] !== EMPTY || mark[ii]) continue;
+          mark[ii] = true;
+          out.push([nx, ny]);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// 当前黑棋全部禁手点（粗判 + 深判两级；结果按盘面快照缓存）
+var __fbCache = { key: null, val: null };
+function getForbiddenMoves(board, color) {
+  var out = [];
+  if (color !== BLACK) return out;
+  var key = board.join(',');
+  if (__fbCache.key === key && __fbCache.val) return __fbCache.val;
+  var cand = neighborCells(board, 4);
+  for (var i = 0; i < cand.length; i++) {
+    var x = cand[i][0], y = cand[i][1];
+    var fast = judgeMove(board, x, y, BLACK, MAX_DEPTH);
+    if (fast.result !== 'forbidden') continue;
+    var deep = judgeMove(board, x, y, BLACK, 0);
+    if (deep.result === 'forbidden') out.push([x, y]);
+  }
+  __fbCache.key = key; __fbCache.val = out;
+  return out;
+}
+
+// ============ 评分表 AI（无搜索，纯单层评估） ============
+var SHAPES = [
+  { re: /11111/, s: 5000000 },
+  { re: /011110/, s: 300000 },
+  { re: /011112|211110|11110|01111|11011|10111|11101/, s: 26000 },
+  { re: /0011100|0010110|0101100|0011010/, s: 6000 },
+  { re: /011100|001110|011010|010110|10011|11001|10101|011012|210110/, s: 1200 },
+  { re: /001100|01010|010010|10001|001010|010100/, s: 550 },
+  { re: /000112|211000|001012|210100|010012|210010|001120|021100/, s: 120 }
+];
+
+function getLineStr(board, x, y, dx, dy, color) {
+  var s = '';
+  for (var i = -4; i <= 4; i++) {
+    var nx = x + dx * i, ny = y + dy * i;
+    if (!inBoard(nx, ny)) { s += '2'; continue; }
+    if (i === 0) { s += '1'; continue; }
+    var v = board[idx(nx, ny)];
+    s += (v === EMPTY) ? '0' : (v === color ? '1' : '2');
+  }
+  return s;
+}
+
+function scoreLineCovered(s) {
+  var best = 0;
+  for (var k = 0; k < SHAPES.length; k++) {
+    var re = new RegExp(SHAPES[k].re.source, 'g');
+    var m;
+    while ((m = re.exec(s)) !== null) {
+      var start = m.index, end = m.index + m[0].length - 1;
+      if (start <= 4 && 4 <= end) { if (SHAPES[k].s > best) best = SHAPES[k].s; break; }
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+  }
+  return best;
+}
+
+function evalPoint(board, x, y, color) {
+  var total = 0;
+  for (var d = 0; d < DIRS.length; d++) {
+    total += scoreLineCovered(getLineStr(board, x, y, DIRS[d][0], DIRS[d][1], color));
+  }
+  return total;
+}
+
+// 找 color 的一手成五点（黑棋要求恰好五连）
+function findWinningMove(board, color) {
+  var cand = neighborCells(board, 1);
+  for (var i = 0; i < cand.length; i++) {
+    var x = cand[i][0], y = cand[i][1];
+    board[idx(x, y)] = color;
+    var win = false;
+    for (var d = 0; d < DIRS.length; d++) {
+      var len = lineLength(board, x, y, DIRS[d][0], DIRS[d][1], color);
+      if (color === BLACK ? len === 5 : len >= 5) { win = true; break; }
+    }
+    board[idx(x, y)] = EMPTY;
+    if (win) return [x, y];
+  }
+  return null;
+}
+
+var LEVELS = {
+  easy:   { radius: 1, atk: 1.0,  def: 0.9,  noise: 420, forceWin: false, forceBlock: false },
+  medium: { radius: 2, atk: 1.0,  def: 1.0,  noise: 45,  forceWin: true,  forceBlock: false },
+  hard:   { radius: 2, atk: 1.35, def: 1.0,  noise: 0,   forceWin: true,  forceBlock: true }
+};
+
+function aiMove(board, color, levelKey) {
+  var cfg = LEVELS[levelKey] || LEVELS.medium;
+  var foe = opponent(color);
+
+  if (cfg.forceWin) {
+    var w = findWinningMove(board, color);
+    if (w) return { x: w[0], y: w[1] };
+  }
+  if (cfg.forceBlock) {
+    var b = findWinningMove(board, foe);
+    if (b) return { x: b[0], y: b[1] };
+  }
+
+  var banned = {};
+  if (color === BLACK) {
+    var fm = getForbiddenMoves(board, BLACK);
+    for (var k = 0; k < fm.length; k++) banned[idx(fm[k][0], fm[k][1])] = true;
+  }
+
+  var cand = neighborCells(board, cfg.radius);
+  var best = null, bestScore = -Infinity;
+  for (var i = 0; i < cand.length; i++) {
+    var x = cand[i][0], y = cand[i][1];
+    var ii = idx(x, y);
+    if (board[ii] !== EMPTY || banned[ii]) continue;
+    var atk = evalPoint(board, x, y, color);
+    var def = evalPoint(board, x, y, foe);
+    var s = atk * cfg.atk + def * cfg.def + Math.random() * cfg.noise;
+    if (s > bestScore) { bestScore = s; best = { x: x, y: y }; }
+  }
+  if (!best) {
+    for (var y2 = 0; y2 < SIZE && !best; y2++)
+      for (var x2 = 0; x2 < SIZE && !best; x2++)
+        if (board[idx(x2, y2)] === EMPTY && !banned[idx(x2, y2)]) best = { x: x2, y: y2 };
+  }
+  return best;
+}
+
+var __RULES_API__ = {
+  SIZE: SIZE, EMPTY: EMPTY, BLACK: BLACK, WHITE: WHITE, DIRS: DIRS, MAX_DEPTH: MAX_DEPTH,
+  idx: idx, inBoard: inBoard, createBoard: createBoard, opponent: opponent,
+  lineLength: lineLength, countFivePoints: countFivePoints, isOpenThreeDir: isOpenThreeDir,
+  judgeMove: judgeMove, neighborCells: neighborCells, getForbiddenMoves: getForbiddenMoves,
+  evalPoint: evalPoint, findWinningMove: findWinningMove, aiMove: aiMove, LEVELS: LEVELS
+};
+// ===== RULES-CORE-END =====
+
+// ============================== UI ==============================
+(function () {
+  var CELL = 38, MARGIN = 30, W = 592;
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = W * dpr;
+  canvas.style.width = W + 'px';
+  ctx.scale(dpr, dpr);
+
+  var game = {
+    board: createBoard(),
+    history: [],
+    mode: 'pve',
+    level: 'medium',
+    humanColor: BLACK,
+    current: BLACK,
+    over: false,
+    resultText: '',
+    showForbidden: true,
+    forbidden: [],
+    aiThinking: false
+  };
+
+  // ---------- 绘制 ----------
+  function drawWood() {
+    var g = ctx.createLinearGradient(0, 0, W, W);
+    g.addColorStop(0, '#dcae6b'); g.addColorStop(.5, '#d09c55'); g.addColorStop(1, '#c98f4e');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, W);
+    var seed = 7;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    ctx.strokeStyle = 'rgba(120,75,30,0.10)'; ctx.lineWidth = 1;
+    for (var i = 0; i < 46; i++) {
+      var yy = rnd() * W;
+      ctx.beginPath(); ctx.moveTo(0, yy);
+      ctx.bezierCurveTo(W * .3, yy + rnd() * 8 - 4, W * .7, yy + rnd() * 8 - 4, W, yy + rnd() * 6 - 3);
+      ctx.stroke();
+    }
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = '#5b3a1a'; ctx.lineWidth = 1;
+    for (var i = 0; i < SIZE; i++) {
+      var p = MARGIN + i * CELL;
+      ctx.beginPath(); ctx.moveTo(MARGIN, p + .5); ctx.lineTo(W - MARGIN, p + .5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p + .5, MARGIN); ctx.lineTo(p + .5, W - MARGIN); ctx.stroke();
+    }
+    ctx.fillStyle = '#5b3a1a';
+    var stars = [[3,3],[11,3],[3,11],[11,11],[7,7]];
+    for (var s = 0; s < stars.length; s++) {
+      ctx.beginPath();
+      ctx.arc(MARGIN + stars[s][0] * CELL, MARGIN + stars[s][1] * CELL, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(91,58,26,0.75)';
+    ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (var k = 0; k < SIZE; k++) {
+      ctx.fillText(String.fromCharCode(65 + k), MARGIN + k * CELL, W - MARGIN + 14);
+      ctx.fillText(String(15 - k), MARGIN - 15, MARGIN + k * CELL);
+    }
+  }
+
+  function px(i) { return MARGIN + i * CELL; }
+
+  function drawStone(x, y, color, alpha) {
+    var cx = px(x), cy = px(y), r = CELL * 0.42;
+    ctx.save();
+    if (alpha !== undefined) ctx.globalAlpha = alpha;
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+    var g = ctx.createRadialGradient(cx - r * .35, cy - r * .4, r * .1, cx, cy, r);
+    if (color === BLACK) { g.addColorStop(0, '#5a5a5a'); g.addColorStop(1, '#050505'); }
+    else { g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#cfc9bd'); }
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMarks() {
+    // 禁手点
+    if (game.showForbidden && !game.over && game.current === BLACK) {
+      ctx.strokeStyle = 'rgba(190,40,30,0.85)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      for (var i = 0; i < game.forbidden.length; i++) {
+        var f = game.forbidden[i], cx = px(f[0]), cy = px(f[1]), s = 6;
+        ctx.beginPath();
+        ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy + s);
+        ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy + s);
+        ctx.stroke();
+      }
+    }
+    // 最后一手
+    if (game.history.length > 0) {
+      var last = game.history[game.history.length - 1];
+      var lx = px(last.x), ly = px(last.y);
+      ctx.strokeStyle = last.color === BLACK ? '#ff5544' : '#d94a2b';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(lx, ly, CELL * 0.42 + 2, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  function render() {
+    drawWood(); drawGrid();
+    for (var i = 0; i < game.history.length; i++) {
+      var h = game.history[i];
+      drawStone(h.x, h.y, h.color);
+    }
+    drawMarks();
+  }
+
+  // ---------- 状态 ----------
+  function refreshForbidden() {
+    game.forbidden = (!game.over && game.current === BLACK)
+      ? getForbiddenMoves(game.board, BLACK) : [];
+  }
+
+  function setStatus(html) { document.getElementById('status').innerHTML = html; }
+
+  function updateStatus() {
+    if (game.over) {
+      setStatus('<b>' + game.resultText + '</b>');
+      return;
+    }
+    var who = game.current === BLACK ? '<span class="who-b"></span>黑棋' : '<span class="who-w"></span>白棋';
+    var extra = '';
+    if (game.mode === 'pve') extra = game.aiThinking ? '　AI 思考中…' : '　（你执' + (game.humanColor === BLACK ? '黑' : '白') + '）';
+    var fb = game.current === BLACK && game.forbidden.length > 0
+      ? '<br>当前禁手点：' + game.forbidden.length + ' 个（红 × 标记）' : '';
+    setStatus('当前回合：<b>' + who + '</b>' + extra + '<br>第 ' + (game.history.length + 1) + ' 手' + fb);
+  }
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+
+  function endGame(title, msg) {
+    game.over = true; game.resultText = title;
+    document.getElementById('dlgTitle').textContent = title;
+    document.getElementById('dlgMsg').textContent = msg;
+    document.getElementById('overlay').classList.add('show');
+    updateStatus(); render();
+  }
+
+  function checkEnd(x, y, color) {
+    var j = judgeMove(game.board, x, y, color, 0);
+    if (j.result === 'win') {
+      var isDraw = false;
+      var full = true;
+      for (var i = 0; i < game.board.length; i++) if (game.board[i] === EMPTY) { full = false; break; }
+      if (full) isDraw = true;
+      if (isDraw) endGame('平局', '棋盘已满，握手言和。');
+      else endGame((color === BLACK ? '黑棋胜' : '白棋胜'), '落子成五（' + j.reason + '）。' + (color === BLACK && j.reason === '长连' ? '白棋长连同样获胜。' : ''));
+      return true;
+    }
+    var full2 = true;
+    for (var i2 = 0; i2 < game.board.length; i2++) if (game.board[i2] === EMPTY) { full2 = false; break; }
+    if (full2) { endGame('平局', '棋盘已满，握手言和。'); return true; }
+    return false;
+  }
+
+  function applyMove(x, y, color) {
+    game.board[idx(x, y)] = color;
+    game.history.push({ x: x, y: y, color: color });
+    if (checkEnd(x, y, color)) return true;
+    game.current = opponent(color);
+    refreshForbidden();
+    updateStatus(); render();
+    return false;
+  }
+
+  function tryHumanMove(x, y) {
+    if (game.over || game.aiThinking) return;
+    if (game.mode === 'pve' && game.current !== game.humanColor) return;
+    if (game.board[idx(x, y)] !== EMPTY) return;
+    if (game.current === BLACK) {
+      var inForbidden = false;
+      for (var i = 0; i < game.forbidden.length; i++)
+        if (game.forbidden[i][0] === x && game.forbidden[i][1] === y) { inForbidden = true; break; }
+      if (inForbidden) { showToast('此处为黑棋禁手点，无法落子'); return; }
+    }
+    var done = applyMove(x, y, game.current);
+    if (!done && game.mode === 'pve') scheduleAI();
+  }
+
+  function scheduleAI() {
+    game.aiThinking = true;
+    updateStatus();
+    setTimeout(function () {
+      var mv = aiMove(game.board, game.current, game.level);
+      game.aiThinking = false;
+      if (!mv) { endGame('黑棋无子可下', '所有可落点均为禁手，白方胜。'); return; }
+      applyMove(mv.x, mv.y, game.current);
+    }, 380);
+  }
+
+  // ---------- 事件 ----------
+  canvas.addEventListener('click', function (e) {
+    var rect = canvas.getBoundingClientRect();
+    var scale = W / rect.width;
+    var cx = (e.clientX - rect.left) * scale;
+    var cy = (e.clientY - rect.top) * scale;
+    var gx = Math.round((cx - MARGIN) / CELL);
+    var gy = Math.round((cy - MARGIN) / CELL);
+    if (!inBoard(gx, gy)) return;
+    var ddx = Math.abs(cx - px(gx)), ddy = Math.abs(cy - px(gy));
+    if (ddx > CELL * 0.5 || ddy > CELL * 0.5) return;
+    tryHumanMove(gx, gy);
+  });
+
+  document.getElementById('segMode').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var v = b.dataset.v;
+    if (v === game.mode) return;
+    game.mode = v;
+    var btns = this.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i] === b);
+    document.getElementById('grpLevel').style.display = (v === 'pve') ? '' : 'none';
+    restart();
+  });
+
+  document.getElementById('segLevel').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    game.level = b.dataset.v;
+    var btns = this.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i] === b);
+    showToast('AI 难度：' + { easy: '简单', medium: '中等', hard: '困难' }[game.level]);
+  });
+
+  document.getElementById('btnUndo').addEventListener('click', function () {
+    if (game.history.length === 0) { showToast('还没有落子'); return; }
+    if (game.aiThinking) return;
+    if (game.over) { game.over = false; document.getElementById('overlay').classList.remove('show'); }
+    var n = 1;
+    if (game.mode === 'pve') {
+      // 撤回到玩家上一手之前：通常退 2 步；若最后一步是玩家（AI 未回应），退 1 步
+      var last = game.history[game.history.length - 1];
+      n = (last.color === game.humanColor) ? 1 : 2;
+      n = Math.min(n, game.history.length);
+    }
+    for (var i = 0; i < n; i++) {
+      var h = game.history.pop();
+      game.board[idx(h.x, h.y)] = EMPTY;
+    }
+    game.current = game.history.length === 0 ? BLACK : opponent(game.history[game.history.length - 1].color);
+    refreshForbidden(); updateStatus(); render();
+  });
+
+  document.getElementById('btnRestart').addEventListener('click', restart);
+  document.getElementById('dlgBtn').addEventListener('click', restart);
+
+  document.getElementById('swForbidden').addEventListener('click', function () {
+    game.showForbidden = !game.showForbidden;
+    document.getElementById('tgForbidden').classList.toggle('on', game.showForbidden);
+    render();
+  });
+
+  function restart() {
+    game.board = createBoard();
+    game.history = [];
+    game.current = BLACK;
+    game.over = false; game.resultText = '';
+    game.aiThinking = false;
+    document.getElementById('overlay').classList.remove('show');
+    refreshForbidden(); updateStatus(); render();
+  }
+
+  refreshForbidden(); updateStatus(); render();
+
+  // —— 测试钩子：仅当显式置 window.__GOMOKU_TEST__ = true 时暴露内部状态；浏览器中无副作用 ——
+  if (typeof window !== 'undefined' && window.__GOMOKU_TEST__) {
+    window.__GOMOKU__ = {
+      game: game,
+      tryCell: tryHumanMove,
+      stoneCount: function () {
+        var n = 0; for (var i = 0; i < game.board.length; i++) if (game.board[i] !== EMPTY) n++; return n;
+      },
+      historyLen: function () { return game.history.length; },
+      isOver: function () { return game.over; }
+    };
+  }
+})();
+</script>
+</body>
+</html>
